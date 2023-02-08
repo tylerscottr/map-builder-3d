@@ -1,11 +1,22 @@
+//! A crate for creating a 3d world in Bevy.
+//!
+//! The crate is composed of the following modules:
+//! - Collision detection: Uses ncollide3d in a Bevy-friendly way so as to allow objects with
+//! ncollide3d shapes to be assets.
+//! - Map: A collection of 3D tiles, obsticals, players, event spaces, and other objects.
+
+#![deny(missing_docs)]
+// #![forbid(missing_docs_in_private_items)]
+
 extern crate ncollide3d as nc3;
 
+/// A module that determines which objects collide with each other
 pub mod collision;
-pub mod map;
-pub mod player;
+
+use std::sync::Arc;
 
 use bevy::prelude::*;
-use collision::{BarrierObject, Collide, MoveableObject};
+use collision::{Collide, ObsticalObject, ShapeType, WalkingObject};
 
 #[derive(Component)]
 struct Person;
@@ -20,28 +31,28 @@ struct Name(String);
 struct GreetTimer(Timer);
 
 fn add_people(mut commands: Commands) {
-    commands.spawn((Obstical, Name("Elaina Proctor".to_string()), BarrierObject));
+    commands.spawn((Obstical, Name("Elaina Proctor".to_string()), ObsticalObject));
     commands.spawn((
         Person,
         Name("Renzo Hume".to_string()),
-        MoveableObject::new(),
+        WalkingObject::new(Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.)))),
     ));
     commands.spawn((
         Person,
         Name("Zayna Nieves".to_string()),
-        MoveableObject::new(),
+        WalkingObject::new(Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.)))),
     ));
     commands.spawn((
         Person,
         Name("Brock Harrison".to_string()),
-        MoveableObject::new(),
+        WalkingObject::new(Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.)))),
     ));
 }
 
 fn greet_people(
     time: Res<Time>,
     mut timer: ResMut<GreetTimer>,
-    mut query_collision: Query<(&Name, &mut MoveableObject), With<MoveableObject>>,
+    mut query_collision: Query<(&Name, &mut WalkingObject), With<WalkingObject>>,
     query_person: Query<&Name, With<Person>>,
 ) {
     // update our timer with the time elapsed since the last update
@@ -55,7 +66,9 @@ fn greet_people(
                 let obj1 = left.get_mut(index1).unwrap();
                 let obj2 = right.get_mut(0).unwrap();
                 println!("Before: {:?} {:?}", obj1.1.pos(), obj2.1.pos());
-                obj1.1.collide_with(&mut obj2.1);
+                if let Some(collision) = obj1.1.get_collision_with(&obj2.1) {
+                    obj1.1.collide_with(&mut obj2.1, collision);
+                }
                 println!("After: {:?} {:?}", obj1.1.pos(), obj2.1.pos());
             }
         }
@@ -67,9 +80,10 @@ fn greet_people(
     }
 }
 
-pub struct HelloPlugin;
+/// The default plugin for Bevy to get full functionality of this crate
+pub struct MapBuilderDefaultPlugin;
 
-impl Plugin for HelloPlugin {
+impl Plugin for MapBuilderDefaultPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(GreetTimer(Timer::from_seconds(2.0, TimerMode::Repeating)))
             .add_startup_system(add_people)
@@ -80,6 +94,6 @@ impl Plugin for HelloPlugin {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(HelloPlugin)
+        .add_plugin(MapBuilderDefaultPlugin)
         .run();
 }
