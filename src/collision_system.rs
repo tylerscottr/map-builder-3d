@@ -1,4 +1,5 @@
-use crate::collision::{Collide, MoveableObject, WalkingObject};
+use crate::collision::{Collide, MoveableObject};
+use crate::collision_walking::WalkingObject;
 
 use bevy::prelude::*;
 

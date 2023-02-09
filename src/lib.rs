@@ -13,5 +13,8 @@ extern crate ncollide3d as nc3;
 /// A module that determines which objects collide with each other
 pub mod collision;
 
+/// A module that handles interactions between walking objects
+pub mod collision_walking;
+
 /// A module that handles object collisions in the event loop
 pub mod collision_system;

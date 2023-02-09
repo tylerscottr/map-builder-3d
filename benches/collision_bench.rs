@@ -2,10 +2,11 @@
 
 extern crate ncollide3d as nc3;
 
-use std::sync::Arc;
+use map_builder_3d::collision::*;
+use map_builder_3d::collision_walking::*;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use map_builder_3d::collision::*;
+use std::sync::Arc;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut c_group = c.benchmark_group("collisions");
