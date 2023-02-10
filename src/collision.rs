@@ -5,7 +5,7 @@ use std::sync::Arc;
 // TODO EventSpace
 
 /// An enumeration describing the various ncollide3d shapes that are available as assets.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Resource)]
 pub enum ShapeType {
     /// A ball shape
     Ball(nc3::shape::Ball<f32>),
@@ -210,16 +210,6 @@ pub trait CollisionObject {
     /// The default implimentation returns `nc3::na::Vector3::<f32>::zeros()`.
     fn nc3_velocity(&self) -> nc3::na::Vector3<f32> {
         nc3::na::Vector3::<f32>::zeros()
-    }
-}
-
-/// An object that moving objects cannot pass through.
-#[derive(Debug, Component)]
-pub struct ObsticalObject;
-
-impl CollisionObject for ObsticalObject {
-    fn shape(&self) -> Arc<ShapeType> {
-        Arc::new(ShapeType::Capsule(nc3::shape::Capsule::<f32>::new(1., 1.)))
     }
 }
 

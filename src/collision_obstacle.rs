@@ -1,44 +1,35 @@
 use crate::collision::{Collide, CollisionObject, MoveableObject, ShapeType};
+use crate::collision_walking::WalkingObject;
 
 use bevy::prelude::*;
 use std::sync::Arc;
 
-/// An object that can walk along the terrain of the map.
+/// An object that prevents moving objects from passing through
 #[derive(Clone, Component)]
-pub struct WalkingObject {
+pub struct ObstacleObject {
     pub(crate) shape: Arc<ShapeType>,
     pub(crate) nc3_shape_handle: Arc<nc3::shape::ShapeHandle<f32>>,
     pub(crate) nc3_position: nc3::na::Isometry3<f32>,
-    pub(crate) nc3_velocity: nc3::na::Vector3<f32>,
-    pub(crate) nc3_toi: Option<f32>,
 }
 
-impl std::fmt::Debug for WalkingObject {
+impl std::fmt::Debug for ObstacleObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WalkingObject")
+        f.debug_struct("ObstacleObject")
             .field("shape", &self.shape)
             .field("pos", &self.nc3_position)
-            .field("vel", &self.nc3_velocity)
-            .field("toi", &self.nc3_toi)
             .finish()
     }
 }
 
-impl WalkingObject {
-    /// Creates a new WalkingObject.
-    pub fn new(
-        shape: Arc<ShapeType>,
-        nc3_position: nc3::na::Isometry3<f32>,
-        nc3_velocity: nc3::na::Vector3<f32>,
-    ) -> Self {
-        WalkingObject {
+impl ObstacleObject {
+    /// Creates a new ObstacleObject.
+    pub fn new(shape: Arc<ShapeType>, nc3_position: nc3::na::Isometry3<f32>) -> Self {
+        ObstacleObject {
             shape: shape.clone(),
             nc3_shape_handle: Arc::new(nc3::shape::ShapeHandle::from_arc(
                 crate::collision::nc3_shape_to_shape(&shape),
             )),
             nc3_position,
-            nc3_velocity,
-            nc3_toi: None,
         }
     }
 
@@ -48,32 +39,7 @@ impl WalkingObject {
     }
 }
 
-impl MoveableObject for WalkingObject {
-    fn combine_toi(&mut self, toi_other: f32) {
-        match self.nc3_toi {
-            None => self.nc3_toi = Some(toi_other),
-            Some(toi_current) => self.nc3_toi = Some(toi_current.min(toi_other)),
-        };
-    }
-
-    fn time_of_impact(&self) -> Option<f32> {
-        self.nc3_toi
-    }
-
-    fn position(&self) -> nc3::na::Isometry3<f32> {
-        self.nc3_position
-    }
-
-    fn velocity(&self) -> nc3::na::Vector3<f32> {
-        self.nc3_velocity
-    }
-
-    fn set_position(&mut self, position: nc3::na::Isometry3<f32>) {
-        self.nc3_position = position;
-    }
-}
-
-impl CollisionObject for WalkingObject {
+impl CollisionObject for ObstacleObject {
     fn shape(&self) -> Arc<ShapeType> {
         self.shape.clone()
     }
@@ -88,14 +54,13 @@ impl CollisionObject for WalkingObject {
     }
 
     fn nc3_velocity(&self) -> nc3::na::Vector3<f32> {
-        self.nc3_velocity
+        nc3::na::zero()
     }
 }
 
-impl Collide<WalkingObject> for WalkingObject {
-    fn collide_with(this: &mut Self, other: &mut WalkingObject, collision: nc3::query::TOI<f32>) {
+impl Collide<ObstacleObject> for WalkingObject {
+    fn collide_with(this: &mut Self, _other: &mut ObstacleObject, collision: nc3::query::TOI<f32>) {
         this.combine_toi(collision.toi);
-        other.combine_toi(collision.toi);
     }
 }
 
@@ -113,16 +78,18 @@ mod tests {
             ),
             nc3::na::Vector3::<f32>::new(0., 0., 0.),
         );
-        let o2 = WalkingObject::new(
+        let o2 = ObstacleObject::new(
             Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
             nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(0., 0., 0.),
         );
         let collision = o1.get_collision_with(&o2, std::f32::MAX);
-        println!("collision_walking::test_simple_no_collide: {:?}", collision);
+        println!(
+            "collision_obstacle::test_simple_no_collide: {:?}",
+            collision
+        );
         assert!(collision.is_none());
     }
 
@@ -136,19 +103,18 @@ mod tests {
             ),
             nc3::na::Vector3::<f32>::new(1., 0., 0.),
         );
-        let o2 = WalkingObject::new(
+        let o2 = ObstacleObject::new(
             Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
             nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(-1., 0., 0.),
         );
         let collision = o1.get_collision_with(&o2, std::f32::MAX);
-        println!("collision_walking::test_simple_collide: {:?}", collision);
+        println!("collision_obstacle::test_simple_collide: {:?}", collision);
         assert!(collision.is_some());
         if let Some(collision) = collision {
-            assert!((collision.toi - 4.).abs() <= 1e-6);
+            assert!((collision.toi - 8.).abs() <= 1e-6);
         }
     }
 
@@ -162,17 +128,16 @@ mod tests {
             ),
             nc3::na::Vector3::<f32>::new(1., 0., 0.),
         );
-        let o2 = WalkingObject::new(
+        let o2 = ObstacleObject::new(
             Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
             nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(0., 0., 0.),
         );
         let collision = o1.get_collision_with(&o2, 1.);
         println!(
-            "collision_walking::test_no_collide_exceeds_max_toi: {:?}",
+            "collision_obstacle::test_no_collide_exceeds_max_toi: {:?}",
             collision
         );
         assert!(collision.is_none());
