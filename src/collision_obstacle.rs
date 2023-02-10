@@ -51,8 +51,8 @@ impl CollisionObject for ObstacleObject {
 }
 
 impl Collide<ObstacleObject> for WalkingObject {
-    fn collide_with(this: &mut Self, _other: &mut ObstacleObject, collision: nc3::query::TOI<f32>) {
-        this.combine_toi(collision.toi);
+    fn collide_with(obj1: &mut Self, _obj2: &mut ObstacleObject, collision: nc3::query::TOI<f32>) {
+        obj1.combine_toi(collision.toi);
     }
 }
 

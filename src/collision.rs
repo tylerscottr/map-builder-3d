@@ -39,6 +39,7 @@ pub struct ShapeTypeWithHandle {
     #[serde(skip_serializing)]
     pub nc3_shape_handle: Arc<nc3::shape::ShapeHandle<f32>>,
 }
+
 impl ShapeTypeWithHandle {
     /// Creates a new ObstacleObject.
     pub fn new(shape: &Arc<ShapeType>) -> Self {
@@ -209,7 +210,46 @@ pub trait CollisionObject {
 /// A trait that defines how CollisionObject instances can interact with each other.
 pub trait Collide<A: CollisionObject>: CollisionObject {
     /// Performs all necessary actions with two objects that collide
-    fn collide_with(this: &mut Self, other: &mut A, collision: nc3::query::TOI<f32>);
+    ///
+    /// Calling this function will look like this:
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use map_builder_3d::nc3;
+    /// # use map_builder_3d::collision::*;
+    /// # use map_builder_3d::collision_walking::*;
+    /// # let time_delta_seconds = std::f32::MAX;
+    /// let mut obj1 = WalkingObject::new(
+    ///     &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+    ///     &nc3::na::Isometry3::<f32>::new(
+    ///         nc3::na::Vector3::<f32>::new(0., 0., 0.),
+    ///         nc3::na::zero(),
+    ///     ),
+    ///     &nc3::na::Vector3::<f32>::new(0.5, 0., 0.),
+    /// );
+    /// let mut obj2 = WalkingObject::new(
+    ///     &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+    ///     &nc3::na::Isometry3::<f32>::new(
+    ///         nc3::na::Vector3::<f32>::new(10., 0., 0.),
+    ///         nc3::na::zero(),
+    ///     ),
+    ///     &nc3::na::Vector3::<f32>::new(-0.5, 0., 0.),
+    /// );
+    /// let collision = obj1.get_collision_with(&obj2, time_delta_seconds);
+    /// // Note: collision == None if time_delta_seconds is less than time of impact
+    /// assert!(collision.is_some());
+    /// assert_eq!(collision.as_ref().unwrap().toi, 8.);
+    /// if let Some(collision) = collision
+    /// {
+    ///     <_>::collide_with(&mut obj1, &mut obj2, collision);
+    /// }
+    /// ```
+    ///
+    /// Note: The `<_>::collide_with(&mut obj1, &mut obj2, collision)` syntax is used to indicate that both
+    /// CollisionObject instances can be modified. On the other hand,
+    /// `obj1.collide_with(&mut obj2, collision)` makes it look like only one of them would be modified.
+    /// With this syntax, `<_>::collide_with(&mut obj1, &mut obj2, collision)` and
+    /// `<_>::collide_with(&mut obj2, &mut obj1, collision)` are obviously equivalent.
+    fn collide_with(obj1: &mut Self, obj2: &mut A, collision: nc3::query::TOI<f32>);
 
     /// Determines if two objects collide or will collide.
     ///
