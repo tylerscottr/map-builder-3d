@@ -1,13 +1,13 @@
-use crate::collision::{Collide, CollisionObject, MoveableObject, ShapeType};
+use crate::collision::{Collide, CollisionObject, MoveableObject, ShapeType, ShapeTypeWithHandle};
 
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// An object that can walk along the terrain of the map.
-#[derive(Clone, Component)]
+#[derive(Clone, Deserialize, Serialize, Component)]
 pub struct WalkingObject {
-    pub(crate) shape: Arc<ShapeType>,
-    pub(crate) nc3_shape_handle: Arc<nc3::shape::ShapeHandle<f32>>,
+    pub(crate) shape: ShapeTypeWithHandle,
     pub(crate) nc3_position: nc3::na::Isometry3<f32>,
     pub(crate) nc3_velocity: nc3::na::Vector3<f32>,
     pub(crate) nc3_toi: Option<f32>,
@@ -16,7 +16,7 @@ pub struct WalkingObject {
 impl std::fmt::Debug for WalkingObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WalkingObject")
-            .field("shape", &self.shape)
+            .field("shape", &self.shape.shape)
             .field("pos", &self.nc3_position)
             .field("vel", &self.nc3_velocity)
             .field("toi", &self.nc3_toi)
@@ -27,17 +27,14 @@ impl std::fmt::Debug for WalkingObject {
 impl WalkingObject {
     /// Creates a new WalkingObject.
     pub fn new(
-        shape: Arc<ShapeType>,
-        nc3_position: nc3::na::Isometry3<f32>,
-        nc3_velocity: nc3::na::Vector3<f32>,
+        shape: &Arc<ShapeType>,
+        nc3_position: &nc3::na::Isometry3<f32>,
+        nc3_velocity: &nc3::na::Vector3<f32>,
     ) -> Self {
         WalkingObject {
-            shape: shape.clone(),
-            nc3_shape_handle: Arc::new(nc3::shape::ShapeHandle::from_arc(
-                crate::collision::nc3_shape_to_shape(&shape),
-            )),
-            nc3_position,
-            nc3_velocity,
+            shape: ShapeTypeWithHandle::new(shape),
+            nc3_position: *nc3_position,
+            nc3_velocity: *nc3_velocity,
             nc3_toi: None,
         }
     }
@@ -74,13 +71,8 @@ impl MoveableObject for WalkingObject {
 }
 
 impl CollisionObject for WalkingObject {
-    fn shape(&self) -> Arc<ShapeType> {
-        self.shape.clone()
-    }
-
-    fn nc3_shape_handle(&self) -> Arc<nc3::shape::ShapeHandle<f32>> {
-        // Optimize to reduce calls to nc3_shape_to_shape.
-        self.nc3_shape_handle.clone()
+    fn shape(&self) -> &ShapeTypeWithHandle {
+        &self.shape
     }
 
     fn nc3_position(&self) -> nc3::na::Isometry3<f32> {
@@ -106,20 +98,20 @@ mod tests {
     #[test]
     fn test_simple_no_collide() {
         let o1 = WalkingObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(0., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(0., 0., 0.),
+            &nc3::na::Vector3::<f32>::new(0., 0., 0.),
         );
         let o2 = WalkingObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(0., 0., 0.),
+            &nc3::na::Vector3::<f32>::new(0., 0., 0.),
         );
         let collision = o1.get_collision_with(&o2, std::f32::MAX);
         println!("collision_walking::test_simple_no_collide: {:?}", collision);
@@ -129,20 +121,20 @@ mod tests {
     #[test]
     fn test_simple_collide() {
         let o1 = WalkingObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(0., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(1., 0., 0.),
+            &nc3::na::Vector3::<f32>::new(1., 0., 0.),
         );
         let o2 = WalkingObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(-1., 0., 0.),
+            &nc3::na::Vector3::<f32>::new(-1., 0., 0.),
         );
         let collision = o1.get_collision_with(&o2, std::f32::MAX);
         println!("collision_walking::test_simple_collide: {:?}", collision);
@@ -155,20 +147,20 @@ mod tests {
     #[test]
     fn test_no_collide_exceeds_max_toi() {
         let o1 = WalkingObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(0., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(1., 0., 0.),
+            &nc3::na::Vector3::<f32>::new(1., 0., 0.),
         );
         let o2 = WalkingObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(0., 0., 0.),
+            &nc3::na::Vector3::<f32>::new(0., 0., 0.),
         );
         let collision = o1.get_collision_with(&o2, 1.);
         println!(

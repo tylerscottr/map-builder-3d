@@ -8,7 +8,7 @@
 #![deny(missing_docs)]
 // #![forbid(missing_docs_in_private_items)]
 
-extern crate ncollide3d as nc3;
+pub extern crate ncollide3d as nc3;
 
 /// A module that determines which objects collide with each other.
 pub mod collision;

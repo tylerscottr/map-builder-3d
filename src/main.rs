@@ -8,7 +8,7 @@
 #![deny(missing_docs)]
 // #![forbid(missing_docs_in_private_items)]
 
-extern crate ncollide3d as nc3;
+pub extern crate ncollide3d as nc3;
 
 /// A module that determines which objects collide with each other.
 pub mod collision;
@@ -42,8 +42,8 @@ fn add_people(mut commands: Commands) {
     commands.spawn((
         Name("Elaina Proctor".to_string()),
         ObstacleObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(10., 10., 0.),
                 nc3::na::zero(),
             ),
@@ -53,36 +53,36 @@ fn add_people(mut commands: Commands) {
         Person,
         Name("Renzo Hume".to_string()),
         WalkingObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(0., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(0.5, 0., 0.),
+            &nc3::na::Vector3::<f32>::new(0.5, 0., 0.),
         ),
     ));
     commands.spawn((
         Person,
         Name("Zayna Nieves".to_string()),
         WalkingObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(-0.5, 0., 0.),
+            &nc3::na::Vector3::<f32>::new(-0.5, 0., 0.),
         ),
     ));
     commands.spawn((
         Person,
         Name("Brock Harrison".to_string()),
         WalkingObject::new(
-            Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            nc3::na::Isometry3::<f32>::new(
+            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+            &nc3::na::Isometry3::<f32>::new(
                 nc3::na::Vector3::<f32>::new(0., 10., 0.),
                 nc3::na::zero(),
             ),
-            nc3::na::Vector3::<f32>::new(1., 0., 0.),
+            &nc3::na::Vector3::<f32>::new(1., 0., 0.),
         ),
     ));
 }

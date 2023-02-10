@@ -1,11 +1,11 @@
 use bevy::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::Arc;
 
 // TODO EventSpace
 
 /// An enumeration describing the various ncollide3d shapes that are available as assets.
-#[derive(Serialize, Deserialize, Clone, Resource)]
+#[derive(Deserialize, Serialize, Clone, Resource)]
 pub enum ShapeType {
     /// A ball shape
     Ball(nc3::shape::Ball<f32>),
@@ -27,6 +27,43 @@ pub enum ShapeType {
     Triangle(nc3::shape::Triangle<f32>),
     /// A compound shape comprised of a vector of other shapes
     Compound(Vec<(nc3::na::Isometry3<f32>, ShapeType)>),
+}
+
+/// A serde-compatible struct that contains both a [`ShapeType`] and a `ncollide3d::shape::ShapeHandle`
+#[derive(Serialize, Clone)]
+pub struct ShapeTypeWithHandle {
+    /// The `ShapeType` implementation of the shape
+    pub shape: Arc<ShapeType>,
+    /// The `nc3::shape::ShapeHandle` implementation of the shape which is used for collision
+    /// detection.
+    #[serde(skip_serializing)]
+    pub nc3_shape_handle: Arc<nc3::shape::ShapeHandle<f32>>,
+}
+impl ShapeTypeWithHandle {
+    /// Creates a new ObstacleObject.
+    pub fn new(shape: &Arc<ShapeType>) -> Self {
+        ShapeTypeWithHandle {
+            shape: shape.clone(),
+            nc3_shape_handle: Arc::new(nc3::shape::ShapeHandle::from_arc(
+                crate::collision::shape_type_to_nc3_shape(shape),
+            )),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ShapeTypeWithHandle {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct ShapeTypeWithHandleSerde {
+            shape: Arc<ShapeType>,
+        }
+
+        let initial = ShapeTypeWithHandleSerde::deserialize(deserializer)?;
+        Ok(ShapeTypeWithHandle::new(&initial.shape))
+    }
 }
 
 impl std::fmt::Debug for ShapeType {
@@ -78,7 +115,7 @@ impl std::fmt::Debug for ShapeType {
 }
 
 /// Converts a `ncollide3::shape::Shape` to a [`ShapeType`]
-pub fn nc3_shape_to_shape(shape: &ShapeType) -> Arc<dyn nc3::shape::Shape<f32>> {
+pub fn shape_type_to_nc3_shape(shape: &ShapeType) -> Arc<dyn nc3::shape::Shape<f32>> {
     match shape {
         ShapeType::Ball(ball) => Arc::new(*ball),
         ShapeType::Capsule(capsule) => Arc::new(*capsule),
@@ -95,7 +132,7 @@ pub fn nc3_shape_to_shape(shape: &ShapeType) -> Arc<dyn nc3::shape::Shape<f32>> 
                 .map(|(iso, shape)| {
                     (
                         *iso,
-                        nc3::shape::ShapeHandle::from_arc(nc3_shape_to_shape(shape)),
+                        nc3::shape::ShapeHandle::from_arc(shape_type_to_nc3_shape(shape)),
                     )
                 })
                 .collect::<Vec<_>>(),
@@ -109,7 +146,7 @@ pub trait MoveableObject {
     ///
     /// Generally, it's advised to have self's toi be an option so that it can be determine whether
     /// or not a collision actually occurred just by observing the toi:
-    /// ```rust
+    /// ```ignore
     /// fn combine_toi(&mut self, toi_other: f32) {
     ///     match self.nc3_toi {
     ///         None => self.nc3_toi = Some(toi_other),
@@ -150,53 +187,9 @@ pub trait MoveableObject {
 /// Objects that are of type CollisionObject can implement ways in which they collide with other
 /// CollisionObject instances.
 pub trait CollisionObject {
-    /// Defines the Bevy-friendly shape object for collision detection.
-    fn shape(&self) -> Arc<ShapeType>;
-
-    /// Defines a ncollide3d shape handle which contains a ncollide3d shape.
-    ///
-    /// This is the shape object that is used in collision detection. Implementations of
-    /// CollisionObject may wish to store the result of this function in a variable so that it
-    /// does not need to be created on each iteration of the event loop.
-    ///
-    /// ```rust
-    /// pub struct NewCollisionObject {
-    ///     shape: Arc<ShapeType>,
-    ///     nc3_shape_handle: Arc<nc3::shape::ShapeHandle<f32>>,
-    ///     ...
-    /// }
-    ///
-    /// impl NewCollisionObject {
-    ///     pub fn new() -> Self {
-    ///         let new_shape = Arc::new(ShapeType::Ball(Ball::<f32>::new(1.)));
-    ///         NewCollisionObject {
-    ///             shape: new_shape.clone(),
-    ///             nc3_shape_handle: Arc::new(nc3::shape::ShapeHandle::from_arc(nc3_shape_to_shape(
-    ///                 &new_shape,
-    ///             ))),
-    ///             ...
-    ///         }
-    ///     }
-    /// }
-    ///
-    /// impl CollisionObject for NewCollisionObject {
-    ///     fn shape(&self) -> Arc<ShapeType> {
-    ///         self.shape.clone()
-    ///     }
-    ///
-    ///     fn nc3_shape_handle(&self) -> Arc<nc3::shape::ShapeHandle<f32>> {
-    ///         // Optimize to reduce calls to nc3_shape_to_shape.
-    ///         self.nc3_shape_handle.clone()
-    ///     }
-    ///
-    ///     ...
-    /// }
-    /// ```
-    fn nc3_shape_handle(&self) -> Arc<nc3::shape::ShapeHandle<f32>> {
-        Arc::new(nc3::shape::ShapeHandle::from_arc(nc3_shape_to_shape(
-            &self.shape(),
-        )))
-    }
+    /// Defines the Bevy-friendly shape object and a ncollide3d shape handle for collision
+    /// detection.
+    fn shape(&self) -> &ShapeTypeWithHandle;
 
     /// The position of the shape.
     ///
@@ -226,10 +219,10 @@ pub trait Collide<A: CollisionObject>: CollisionObject {
             &nc3::query::DefaultTOIDispatcher,
             &self.nc3_position(),
             &self.nc3_velocity(),
-            self.nc3_shape_handle().as_arc().as_ref(),
+            self.shape().nc3_shape_handle.as_arc().as_ref(),
             &other.nc3_position(),
             &other.nc3_velocity(),
-            other.nc3_shape_handle().as_arc().as_ref(),
+            other.shape().nc3_shape_handle.as_arc().as_ref(),
             max_toi,
             0.0,
         )

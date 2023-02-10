@@ -12,14 +12,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let mut c_group = c.benchmark_group("collisions");
 
     let ball_left = WalkingObject::new(
-        Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-        nc3::na::Isometry3::<f32>::new(nc3::na::Vector3::<f32>::new(0., 0., 0.), nc3::na::zero()),
-        nc3::na::Vector3::<f32>::new(1., 0., 0.),
+        &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+        &nc3::na::Isometry3::<f32>::new(nc3::na::Vector3::<f32>::new(0., 0., 0.), nc3::na::zero()),
+        &nc3::na::Vector3::<f32>::new(1., 0., 0.),
     );
     let ball_right = WalkingObject::new(
-        Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-        nc3::na::Isometry3::<f32>::new(nc3::na::Vector3::<f32>::new(10., 0., 0.), nc3::na::zero()),
-        nc3::na::Vector3::<f32>::new(-1., 0., 0.),
+        &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
+        &nc3::na::Isometry3::<f32>::new(nc3::na::Vector3::<f32>::new(10., 0., 0.), nc3::na::zero()),
+        &nc3::na::Vector3::<f32>::new(-1., 0., 0.),
     );
 
     // Change sample size
