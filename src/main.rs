@@ -25,7 +25,7 @@ pub mod collision_system;
 use std::sync::Arc;
 
 use bevy::prelude::*;
-use collision::ShapeType;
+use collision::{PositionOffset, ShapeType};
 use collision_obstacle::ObstacleObject;
 use collision_walking::WalkingObject;
 
@@ -47,6 +47,7 @@ fn add_people(mut commands: Commands) {
                 nc3::na::Vector3::<f32>::new(10., 10., 0.),
                 nc3::na::zero(),
             ),
+            &PositionOffset::Default,
         ),
     ));
     commands.spawn((
@@ -59,6 +60,7 @@ fn add_people(mut commands: Commands) {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(0.5, 0., 0.),
+            &PositionOffset::Default,
         ),
     ));
     commands.spawn((
@@ -71,6 +73,7 @@ fn add_people(mut commands: Commands) {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(-0.5, 0., 0.),
+            &PositionOffset::Default,
         ),
     ));
     commands.spawn((
@@ -83,6 +86,7 @@ fn add_people(mut commands: Commands) {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(1., 0., 0.),
+            &PositionOffset::Default,
         ),
     ));
 }

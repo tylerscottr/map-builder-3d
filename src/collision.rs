@@ -4,35 +4,60 @@ use std::sync::Arc;
 
 // TODO EventSpace
 
+/// An enum used to describe positional relationships
+///
+/// It doesn't always make sense for shape's positions to be the same as the reference position of
+/// the object. For example, a walking object's reference point should be the center of the feet,
+/// but the shape object should be centered along the position of the body.
+#[derive(Deserialize, Serialize, Clone, Copy, Resource)]
+pub enum PositionOffset {
+    /// Use the default implementation for the CollisionObject.
+    Default,
+    /// No offset in the position
+    Zero,
+    /// Only offset the position.
+    PositionOffset(nc3::na::Translation3<f32>),
+    /// Only offset the angle.
+    AngleOffset(nc3::na::UnitQuaternion<f32>),
+    /// Offset the full isometry.
+    IsometryOffset(nc3::na::Isometry3<f32>),
+}
+
+impl Default for PositionOffset {
+    fn default() -> Self {
+        PositionOffset::Default
+    }
+}
+
 /// An enumeration describing the various ncollide3d shapes that are available as assets.
 #[derive(Deserialize, Serialize, Clone, Resource)]
 pub enum ShapeType {
-    /// A ball shape
+    /// A ball shape.
     Ball(nc3::shape::Ball<f32>),
-    /// A capsule shape
+    /// A capsule shape.
     Capsule(nc3::shape::Capsule<f32>),
-    /// A convex hull shape
+    /// A convex hull shape.
     ConvexHull(nc3::shape::ConvexHull<f32>),
-    /// A cuboid shape
+    /// A cuboid shape.
     Cuboid(nc3::shape::Cuboid<f32>),
-    /// A height field
+    /// A height field.
     HeightField(nc3::shape::HeightField<f32>),
-    /// A plane
+    /// A plane.
     Plane(nc3::shape::Plane<f32>),
-    /// A segment
+    /// A segment.
     Segment(nc3::shape::Segment<f32>),
-    /// A triangle mesh shape
+    /// A triangle mesh shape.
     TriMesh(nc3::shape::TriMesh<f32>),
-    /// A triangle shape
+    /// A triangle shape.
     Triangle(nc3::shape::Triangle<f32>),
-    /// A compound shape comprised of a vector of other shapes
+    /// A compound shape comprised of a vector of other shapes.
     Compound(Vec<(nc3::na::Isometry3<f32>, ShapeType)>),
 }
 
-/// A serde-compatible struct that contains both a [`ShapeType`] and a `ncollide3d::shape::ShapeHandle`
+/// A serde-compatible struct that contains both a [`ShapeType`] and a `ncollide3d::shape::ShapeHandle`.
 #[derive(Serialize, Clone)]
 pub struct ShapeTypeWithHandle {
-    /// The `ShapeType` implementation of the shape
+    /// The `ShapeType` implementation of the shape.
     pub shape: Arc<ShapeType>,
     /// The `nc3::shape::ShapeHandle` implementation of the shape which is used for collision
     /// detection.
@@ -115,7 +140,7 @@ impl std::fmt::Debug for ShapeType {
     }
 }
 
-/// Converts a `ncollide3::shape::Shape` to a [`ShapeType`]
+/// Converts a `ncollide3::shape::Shape` to a [`ShapeType`].
 pub fn shape_type_to_nc3_shape(shape: &ShapeType) -> Arc<dyn nc3::shape::Shape<f32>> {
     match shape {
         ShapeType::Ball(ball) => Arc::new(*ball),
@@ -157,7 +182,7 @@ pub trait MoveableObject {
     /// ```
     fn combine_toi(&mut self, toi_other: f32);
 
-    /// The calculated time of impact or none if an impact has not ocurred
+    /// The calculated time of impact or none if an impact has not ocurred.
     fn time_of_impact(&self) -> Option<f32>;
 
     /// The position of the object.
@@ -169,7 +194,7 @@ pub trait MoveableObject {
     /// Sets the position of the object.
     fn set_position(&mut self, position: nc3::na::Isometry3<f32>);
 
-    /// Updates the position of the object based on the delta time and the object's toi
+    /// Updates the position of the object based on the delta time and the object's toi.
     fn update_position_for_frame(&mut self, time_delta: std::time::Duration) {
         let time_delta = {
             match self.time_of_impact() {
@@ -205,11 +230,39 @@ pub trait CollisionObject {
     fn nc3_velocity(&self) -> nc3::na::Vector3<f32> {
         nc3::na::Vector3::<f32>::zeros()
     }
+
+    /// The default offset between the object position and the shape
+    fn default_shape_offset_isometry(&self) -> nc3::na::Isometry3<f32> {
+        nc3::na::Isometry3::<f32>::new(nc3::na::zero(), nc3::na::zero())
+    }
+
+    /// The offset between the object and the shape
+    fn shape_offset(&self) -> PositionOffset {
+        PositionOffset::Default
+    }
+}
+
+/// Gets calculates the offset position of the provided CollisionObject
+pub fn get_offset_position(obj: &dyn CollisionObject) -> nc3::na::Isometry3<f32> {
+    obj.nc3_position()
+        * match obj.shape_offset() {
+            PositionOffset::Default => obj.default_shape_offset_isometry(),
+            PositionOffset::Zero => nc3::na::Isometry3::<f32>::identity(),
+            PositionOffset::PositionOffset(pos_offset) => nc3::na::Isometry3::<f32>::from_parts(
+                pos_offset,
+                nc3::na::UnitQuaternion::<f32>::identity(),
+            ),
+            PositionOffset::AngleOffset(angle_offset) => nc3::na::Isometry3::<f32>::from_parts(
+                nc3::na::Translation3::identity(),
+                angle_offset,
+            ),
+            PositionOffset::IsometryOffset(iso_offset) => iso_offset,
+        }
 }
 
 /// A trait that defines how CollisionObject instances can interact with each other.
-pub trait Collide<A: CollisionObject>: CollisionObject {
-    /// Performs all necessary actions with two objects that collide
+pub trait Collide<A: CollisionObject>: CollisionObject + Sized {
+    /// Performs all necessary actions with two objects that collide.
     ///
     /// Calling this function will look like this:
     /// ```
@@ -225,6 +278,7 @@ pub trait Collide<A: CollisionObject>: CollisionObject {
     ///         nc3::na::zero(),
     ///     ),
     ///     &nc3::na::Vector3::<f32>::new(0.5, 0., 0.),
+    ///     &PositionOffset::Default,
     /// );
     /// let mut obj2 = WalkingObject::new(
     ///     &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
@@ -233,6 +287,7 @@ pub trait Collide<A: CollisionObject>: CollisionObject {
     ///         nc3::na::zero(),
     ///     ),
     ///     &nc3::na::Vector3::<f32>::new(-0.5, 0., 0.),
+    ///     &PositionOffset::Default,
     /// );
     /// let collision = obj1.get_collision_with(&obj2, time_delta_seconds);
     /// // Note: collision == None if time_delta_seconds is less than time of impact
@@ -257,10 +312,10 @@ pub trait Collide<A: CollisionObject>: CollisionObject {
     fn get_collision_with(&self, other: &A, max_toi: f32) -> Option<nc3::query::TOI<f32>> {
         nc3::query::time_of_impact(
             &nc3::query::DefaultTOIDispatcher,
-            &self.nc3_position(),
+            &get_offset_position(self),
             &self.nc3_velocity(),
             self.shape().nc3_shape_handle.as_arc().as_ref(),
-            &other.nc3_position(),
+            &get_offset_position(other),
             &other.nc3_velocity(),
             other.shape().nc3_shape_handle.as_arc().as_ref(),
             max_toi,

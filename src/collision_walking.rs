@@ -1,4 +1,6 @@
-use crate::collision::{Collide, CollisionObject, MoveableObject, ShapeType, ShapeTypeWithHandle};
+use crate::collision::{
+    Collide, CollisionObject, MoveableObject, PositionOffset, ShapeType, ShapeTypeWithHandle,
+};
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -11,6 +13,7 @@ pub struct WalkingObject {
     pub(crate) nc3_position: nc3::na::Isometry3<f32>,
     pub(crate) nc3_velocity: nc3::na::Vector3<f32>,
     pub(crate) nc3_toi: Option<f32>,
+    pub(crate) shape_offset: PositionOffset,
 }
 
 impl std::fmt::Debug for WalkingObject {
@@ -30,12 +33,14 @@ impl WalkingObject {
         shape: &Arc<ShapeType>,
         nc3_position: &nc3::na::Isometry3<f32>,
         nc3_velocity: &nc3::na::Vector3<f32>,
+        shape_offset: &PositionOffset,
     ) -> Self {
         WalkingObject {
             shape: ShapeTypeWithHandle::new(shape),
             nc3_position: *nc3_position,
             nc3_velocity: *nc3_velocity,
             nc3_toi: None,
+            shape_offset: *shape_offset,
         }
     }
 
@@ -82,6 +87,22 @@ impl CollisionObject for WalkingObject {
     fn nc3_velocity(&self) -> nc3::na::Vector3<f32> {
         self.nc3_velocity
     }
+
+    fn default_shape_offset_isometry(&self) -> nc3::na::Isometry3<f32> {
+        let aabb = self
+            .shape
+            .nc3_shape_handle
+            .aabb(&nc3::na::Isometry3::<f32>::identity());
+        nc3::na::Isometry3::<f32>::from_parts(
+            nc3::na::Translation3::<f32>::new(aabb.center().x, aabb.center().y, aabb.maxs.z)
+                .inverse(),
+            nc3::na::UnitQuaternion::<f32>::identity(),
+        )
+    }
+
+    fn shape_offset(&self) -> PositionOffset {
+        self.shape_offset
+    }
 }
 
 impl Collide<WalkingObject> for WalkingObject {
@@ -104,6 +125,7 @@ mod tests {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(0., 0., 0.),
+            &PositionOffset::Default,
         );
         let o2 = WalkingObject::new(
             &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
@@ -112,6 +134,7 @@ mod tests {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(0., 0., 0.),
+            &PositionOffset::Default,
         );
         let collision = o1.get_collision_with(&o2, std::f32::MAX);
         println!("collision_walking::test_simple_no_collide: {:?}", collision);
@@ -127,6 +150,7 @@ mod tests {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(1., 0., 0.),
+            &PositionOffset::Default,
         );
         let o2 = WalkingObject::new(
             &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
@@ -135,6 +159,7 @@ mod tests {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(-1., 0., 0.),
+            &PositionOffset::Default,
         );
         let collision = o1.get_collision_with(&o2, std::f32::MAX);
         println!("collision_walking::test_simple_collide: {:?}", collision);
@@ -153,6 +178,7 @@ mod tests {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(1., 0., 0.),
+            &PositionOffset::Default,
         );
         let o2 = WalkingObject::new(
             &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
@@ -161,6 +187,7 @@ mod tests {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(0., 0., 0.),
+            &PositionOffset::Default,
         );
         let collision = o1.get_collision_with(&o2, 1.);
         println!(

@@ -1,4 +1,6 @@
-use crate::collision::{Collide, CollisionObject, MoveableObject, ShapeType, ShapeTypeWithHandle};
+use crate::collision::{
+    Collide, CollisionObject, MoveableObject, PositionOffset, ShapeType, ShapeTypeWithHandle,
+};
 use crate::collision_walking::WalkingObject;
 
 use bevy::prelude::*;
@@ -10,6 +12,7 @@ use std::sync::Arc;
 pub struct ObstacleObject {
     pub(crate) shape: ShapeTypeWithHandle,
     pub(crate) nc3_position: nc3::na::Isometry3<f32>,
+    pub(crate) shape_offset: PositionOffset,
 }
 
 impl std::fmt::Debug for ObstacleObject {
@@ -23,10 +26,15 @@ impl std::fmt::Debug for ObstacleObject {
 
 impl ObstacleObject {
     /// Creates a new ObstacleObject.
-    pub fn new(shape: &Arc<ShapeType>, nc3_position: &nc3::na::Isometry3<f32>) -> Self {
+    pub fn new(
+        shape: &Arc<ShapeType>,
+        nc3_position: &nc3::na::Isometry3<f32>,
+        shape_offset: &PositionOffset,
+    ) -> Self {
         ObstacleObject {
             shape: ShapeTypeWithHandle::new(shape),
             nc3_position: *nc3_position,
+            shape_offset: *shape_offset,
         }
     }
 
@@ -47,6 +55,10 @@ impl CollisionObject for ObstacleObject {
 
     fn nc3_velocity(&self) -> nc3::na::Vector3<f32> {
         nc3::na::zero()
+    }
+
+    fn shape_offset(&self) -> PositionOffset {
+        self.shape_offset
     }
 }
 
@@ -69,6 +81,7 @@ mod tests {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(0., 0., 0.),
+            &PositionOffset::Zero,
         );
         let o2 = ObstacleObject::new(
             &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
@@ -76,6 +89,7 @@ mod tests {
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
+            &PositionOffset::Zero,
         );
         let collision = o1.get_collision_with(&o2, std::f32::MAX);
         println!(
@@ -94,6 +108,7 @@ mod tests {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(1., 0., 0.),
+            &PositionOffset::Zero,
         );
         let o2 = ObstacleObject::new(
             &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
@@ -101,6 +116,7 @@ mod tests {
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
+            &PositionOffset::Zero,
         );
         let collision = o1.get_collision_with(&o2, std::f32::MAX);
         println!("collision_obstacle::test_simple_collide: {:?}", collision);
@@ -119,6 +135,7 @@ mod tests {
                 nc3::na::zero(),
             ),
             &nc3::na::Vector3::<f32>::new(1., 0., 0.),
+            &PositionOffset::Zero,
         );
         let o2 = ObstacleObject::new(
             &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
@@ -126,6 +143,7 @@ mod tests {
                 nc3::na::Vector3::<f32>::new(10., 0., 0.),
                 nc3::na::zero(),
             ),
+            &PositionOffset::Zero,
         );
         let collision = o1.get_collision_with(&o2, 1.);
         println!(

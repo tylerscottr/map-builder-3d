@@ -15,11 +15,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
         &nc3::na::Isometry3::<f32>::new(nc3::na::Vector3::<f32>::new(0., 0., 0.), nc3::na::zero()),
         &nc3::na::Vector3::<f32>::new(1., 0., 0.),
+        &PositionOffset::Default,
     );
     let ball_right = WalkingObject::new(
         &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
         &nc3::na::Isometry3::<f32>::new(nc3::na::Vector3::<f32>::new(10., 0., 0.), nc3::na::zero()),
         &nc3::na::Vector3::<f32>::new(-1., 0., 0.),
+        &PositionOffset::Default,
     );
 
     // Change sample size
