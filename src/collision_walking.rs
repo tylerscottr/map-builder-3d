@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 /// An object that can walk along the terrain of the map.
 #[derive(Clone, Deserialize, Serialize, Component)]
+#[component(storage = "SparseSet")]
 pub struct WalkingObject {
     pub(crate) shape: ShapeTypeWithHandle,
     pub(crate) nc3_position: nc3::na::Isometry3<f32>,

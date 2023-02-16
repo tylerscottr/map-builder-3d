@@ -30,6 +30,7 @@ use collision_obstacle::ObstacleObject;
 use collision_walking::WalkingObject;
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 struct Person;
 
 #[derive(Component)]
