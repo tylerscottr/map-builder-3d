@@ -6,14 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = { version = "0.9", features = [
-    "bevy_render",
-    "bevy_pbr",
-] } # TODO: Which of these do we actually need for this project?
-# bevy = { version = "0.9", features = ["dynamic"] }
-serde = "1.0"
-ncollide3d = { version = "0.33", features = ["dim3", "serde-serialize"] }
-# ncollide3d = "0.33"
+bevy = "0.9"
+bevy_rapier3d = { version = "0.20", features = ["debug-render"] }
 
 # [dev-dependencies]
 criterion = "0.4"
@@ -22,10 +16,14 @@ criterion = "0.4"
 [profile.dev]
 opt-level = 1
 
-# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+# Improve package performance in debug builds
 [profile.dev.package."*"]
 opt-level = 3
 
-[[bench]]
-name = "collision_bench"
-harness = false
+# Rapier recommends using this to improve performance in release builds
+[profile.release]
+codegen-units = 1
+
+# [[bench]]
+# name = "collision_bench"
+# harness = false

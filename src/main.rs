@@ -1,134 +1,150 @@
 //! A crate for creating a 3d world in Bevy.
 //!
 //! The crate is composed of the following modules:
-//! - [collision]: Uses ncollide3d in a Bevy-friendly way so as to allow objects with
-//! ncollide3d shapes to be assets.
 //! - map: A collection of 3D tiles, obstacles, players, event spaces, and other objects.
 
 #![deny(missing_docs)]
 // #![forbid(missing_docs_in_private_items)]
 
-pub extern crate ncollide3d as nc3;
+/// A module that integrates the adds some useful functions to the Rapier physics engine.
+pub mod rapier_mesh_bundles;
 
-/// A module that determines which objects collide with each other.
-pub mod collision;
-
-/// A module for creating and interacting with walking objects.
-pub mod collision_walking;
-
-/// A module for creating and interacting with obstacles.
-pub mod collision_obstacle;
-
-/// A module that handles object collisions in the event loop.
-pub mod collision_system;
-
-use std::sync::Arc;
+use rapier_mesh_bundles::*;
 
 use bevy::prelude::*;
-use collision::{PositionOffset, ShapeType};
-use collision_obstacle::ObstacleObject;
-use collision_walking::WalkingObject;
+use bevy_rapier3d::prelude::*;
 
 #[derive(Component)]
-#[component(storage = "SparseSet")]
-struct Person;
+struct LocalPlayer(Vec3);
 
 #[derive(Component)]
 struct Name(String);
 
-#[derive(Resource)]
-struct DebugMessageTimer(Timer);
-
-fn add_people(mut commands: Commands) {
-    commands.spawn((
-        Name("Elaina Proctor".to_string()),
-        ObstacleObject::new(
-            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            &nc3::na::Isometry3::<f32>::new(
-                nc3::na::Vector3::<f32>::new(10., 10., 0.),
-                nc3::na::zero(),
-            ),
-            &PositionOffset::Default,
-        ),
-    ));
-    commands.spawn((
-        Person,
-        Name("Renzo Hume".to_string()),
-        WalkingObject::new(
-            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            &nc3::na::Isometry3::<f32>::new(
-                nc3::na::Vector3::<f32>::new(0., 0., 0.),
-                nc3::na::zero(),
-            ),
-            &nc3::na::Vector3::<f32>::new(0.5, 0., 0.),
-            &PositionOffset::Default,
-        ),
-    ));
-    commands.spawn((
-        Person,
-        Name("Zayna Nieves".to_string()),
-        WalkingObject::new(
-            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            &nc3::na::Isometry3::<f32>::new(
-                nc3::na::Vector3::<f32>::new(10., 0., 0.),
-                nc3::na::zero(),
-            ),
-            &nc3::na::Vector3::<f32>::new(-0.5, 0., 0.),
-            &PositionOffset::Default,
-        ),
-    ));
-    commands.spawn((
-        Person,
-        Name("Brock Harrison".to_string()),
-        WalkingObject::new(
-            &Arc::new(ShapeType::Ball(nc3::shape::Ball::<f32>::new(1.))),
-            &nc3::na::Isometry3::<f32>::new(
-                nc3::na::Vector3::<f32>::new(0., 10., 0.),
-                nc3::na::zero(),
-            ),
-            &nc3::na::Vector3::<f32>::new(1., 0., 0.),
-            &PositionOffset::Default,
-        ),
-    ));
-}
-
-type QueryWalkingNamed<'ref1, 'ref2, 'world, 'state> =
-    Query<'world, 'state, (&'ref1 Name, &'ref2 WalkingObject), (With<Name>, With<WalkingObject>)>;
-fn print_debug_messages(
-    time: Res<Time>,
-    mut timer: ResMut<DebugMessageTimer>,
-    query_walking_named: QueryWalkingNamed,
-) {
-    // Update our timer with the time elapsed since the last update. If that caused the timer to
-    // finish, we print some debug messages.
-    if timer.0.tick(time.delta()).just_finished() {
-        // Print walking object locations
-        println!("Walkable objects:");
-        for tuple in query_walking_named.iter() {
-            println!("  > {}: {:?}", tuple.0 .0, tuple.1.pos());
-        }
-        println!();
-    }
-}
-
-/// The default plugin for Bevy to get full functionality of this crate
-pub struct MapBuilderDefaultPlugin;
-
-impl Plugin for MapBuilderDefaultPlugin {
-    fn build(&self, app: &mut App) {
-        app.insert_resource(DebugMessageTimer(Timer::from_seconds(
-            1.0,
-            TimerMode::Repeating,
-        )))
-        .add_startup_system(add_people)
-        .add_system(collision_system::system_walking_default)
-        .add_system(print_debug_messages);
-    }
-}
-
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(MapBuilderDefaultPlugin)
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        // .add_plugin(RapierDebugRenderPlugin::default())
+        .add_startup_system(setup_graphics)
+        .add_startup_system(setup_physics)
+        .add_system(print_ball_altitude)
+        .add_system_to_stage(CoreStage::PostUpdate, sync_camera)
         .run();
+}
+
+fn setup_graphics(mut commands: Commands) {
+    const ZOOM: f32 = 3.;
+    // Add a camera so we can see the debug-render.
+    commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(-3.0 * ZOOM, 3.0 * ZOOM, 10.0 * ZOOM)
+            .looking_at(Vec3::ZERO, Vec3::Y),
+        ..Default::default()
+    });
+
+    // Light bulb
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            shadows_enabled: true,
+            ..default()
+        },
+        transform: Transform {
+            translation: Vec3::new(0.0, 2.0, 0.0),
+            rotation: Quat::from_rotation_x(-std::f32::consts::PI / 4.),
+            ..default()
+        },
+        ..default()
+    });
+}
+
+fn setup_physics(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    /* Create the ground. */
+    commands.spawn(RapierColliderPbrBundle {
+        shape: RapierShapeBundle::cuboid(Vec3::new(15.0, 5.0, 15.0), &mut meshes),
+        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+        transform: Transform::from_xyz(0.0, -4.5, 0.0),
+        ..default()
+    });
+    commands.spawn(RapierColliderPbrBundle {
+        shape: RapierShapeBundle::plane(Vec2::new(5.0, 5.0), &mut meshes),
+        material: materials.add(Color::rgb(0.2, 0.4, 0.2).into()),
+        transform: Transform::from_xyz(0.0, 2.0, 0.0),
+        ..default()
+    });
+
+    /* Create the bouncing ball. */
+    commands
+        .spawn(Name("Kong Ball".into()))
+        .insert(RigidBody::Dynamic)
+        .insert(Damping {
+            linear_damping: 0.2,
+            angular_damping: 0.2,
+        })
+        .insert(Velocity {
+            linvel: Vec3::new(1.0, 2.0, 3.0),
+            // angvel: Vec3::ZERO,
+            angvel: Vec3::new(0.2, -1.0, 0.0),
+        })
+        .with_children(|children| {
+            children
+                .spawn(RapierColliderPbrBundle {
+                    shape: RapierShapeBundle::sphere(0.5, &mut meshes),
+                    material: materials.add(Color::rgb(0.7, 0.3, 0.3).into()),
+                    transform: Transform::from_xyz(0.0, -0.25, 0.0),
+                    ..default()
+                })
+                .insert(Restitution {
+                    coefficient: 0.7,
+                    combine_rule: CoefficientCombineRule::Max,
+                });
+            children
+                .spawn(RapierColliderPbrBundle {
+                    shape: RapierShapeBundle::sphere(0.5, &mut meshes),
+                    material: materials.add(Color::rgb(0.7, 0.3, 0.3).into()),
+                    transform: Transform::from_xyz(0.0, 0.25, 0.0),
+                    ..default()
+                })
+                .insert(Restitution {
+                    coefficient: 0.7,
+                    combine_rule: CoefficientCombineRule::Max,
+                });
+        })
+        .insert(TransformBundle::from(Transform::from_xyz(0.0, 4.0, 0.0)))
+        .insert(VisibilityBundle::default());
+
+    /* Create the bouncing capsule. */
+    commands
+        .spawn(LocalPlayer(0.9 * Vec3::Y))
+        .insert(Name("Capsule".into()))
+        .insert(RigidBody::Dynamic)
+        .insert(RapierColliderPbrBundle {
+            shape: RapierShapeBundle::capsule(0.5, 0.5, &mut meshes),
+            material: materials.add(Color::rgb(0.3, 0.3, 0.7).into()),
+            transform: Transform::from_xyz(-1.0, 5.0, -1.0),
+            ..default()
+        });
+}
+
+fn print_ball_altitude(positions: Query<(&Name, &Transform), With<RigidBody>>) {
+    for (name, transform) in positions.iter() {
+        println!("Altitude of {}: {}", name.0, transform.translation.y);
+    }
+}
+
+fn sync_camera(
+    local_players: Query<(&LocalPlayer, &Transform), With<LocalPlayer>>,
+    mut cameras: Query<&mut Transform, (With<Camera>, Without<LocalPlayer>)>,
+) {
+    let Some((local_player_0, transform_player_0)) = local_players.iter().next() else { return; };
+    let Some(mut transform_cam_0) = cameras.iter_mut().next() else { return; };
+
+    let player_pos = transform_player_0.transform_point(Vec3::ZERO);
+    let new_cam_pos = player_pos + local_player_0.0;
+    transform_cam_0.as_mut().clone_from(
+        &Transform::from_translation(new_cam_pos)
+            .looking_at(new_cam_pos + 1. * Vec3::Z - 0. * Vec3::Y, Vec3::Y),
+    );
 }
