@@ -8,3 +8,6 @@
 
 /// A module that integrates the adds some useful functions to the Rapier physics engine.
 pub mod rapier_mesh_bundles;
+
+/// A module that adds mouse/keyboard control to the camera.
+pub mod controller;

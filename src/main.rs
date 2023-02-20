@@ -9,37 +9,64 @@
 /// A module that integrates the adds some useful functions to the Rapier physics engine.
 pub mod rapier_mesh_bundles;
 
+/// A module that adds mouse/keyboard control to the camera.
+pub mod controller;
+
+use controller::{fps_controller::*, *};
 use rapier_mesh_bundles::*;
 
-use bevy::prelude::*;
+use bevy::{
+    core_pipeline::clear_color::ClearColorConfig,
+    prelude::*,
+    render::camera::Viewport,
+    window::{PresentMode, WindowResized},
+};
 use bevy_rapier3d::prelude::*;
 
 #[derive(Component)]
-struct LocalPlayer(Vec3);
+struct LeftCamera;
+
+#[derive(Component)]
+struct RightCamera;
 
 #[derive(Component)]
 struct Name(String);
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                title: "Map Builder 3D".to_string(),
+                width: 1280.0,
+                height: 720.0,
+                position: WindowPosition::Centered,
+                resizable: true,
+                present_mode: PresentMode::AutoVsync,
+                ..default()
+            },
+            ..default()
+        }))
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         // .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(LookTransformPlugin)
+        .add_plugin(FpsCameraPlugin::new())
         .add_startup_system(setup_graphics)
         .add_startup_system(setup_physics)
-        .add_system(print_ball_altitude)
-        .add_system_to_stage(CoreStage::PostUpdate, sync_camera)
+        // .add_system(print_ball_altitude)
+        .add_system(set_camera_viewports)
         .run();
 }
 
 fn setup_graphics(mut commands: Commands) {
-    const ZOOM: f32 = 3.;
     // Add a camera so we can see the debug-render.
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(-3.0 * ZOOM, 3.0 * ZOOM, 10.0 * ZOOM)
-            .looking_at(Vec3::ZERO, Vec3::Y),
-        ..Default::default()
-    });
+    const CAM_DISTANCE: f32 = 30.;
+    let initial_cam_pos = CAM_DISTANCE * Vec3::new(-3.0, 3.0, 10.0).normalize();
+    commands
+        .spawn(LeftCamera)
+        .insert(LookTransformCameraBundle {
+            look_transform: LookTransform::from_pos_target(initial_cam_pos, Vec3::ZERO),
+            ..default()
+        });
 
     // Light bulb
     commands.spawn(DirectionalLightBundle {
@@ -61,7 +88,7 @@ fn setup_physics(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    /* Create the ground. */
+    // Create the ground.
     commands.spawn(RapierColliderPbrBundle {
         shape: RapierShapeBundle::cuboid(Vec3::new(15.0, 5.0, 15.0), &mut meshes),
         material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
@@ -75,7 +102,7 @@ fn setup_physics(
         ..default()
     });
 
-    /* Create the bouncing ball. */
+    // Create the bouncing ball.
     commands
         .spawn(Name("Kong Ball".into()))
         .insert(RigidBody::Dynamic)
@@ -115,36 +142,68 @@ fn setup_physics(
         .insert(TransformBundle::from(Transform::from_xyz(0.0, 4.0, 0.0)))
         .insert(VisibilityBundle::default());
 
-    /* Create the bouncing capsule. */
+    // Create the bouncing capsule.
+    let capsule_pos = Vec3::new(-1.0, 5.0, -1.0);
     commands
-        .spawn(LocalPlayer(0.9 * Vec3::Y))
-        .insert(Name("Capsule".into()))
-        .insert(RigidBody::Dynamic)
+        .spawn(Name("Capsule".into()))
         .insert(RapierColliderPbrBundle {
             shape: RapierShapeBundle::capsule(0.5, 0.5, &mut meshes),
             material: materials.add(Color::rgb(0.3, 0.3, 0.7).into()),
-            transform: Transform::from_xyz(-1.0, 5.0, -1.0),
+            transform: Transform::from_translation(capsule_pos),
             ..default()
+        })
+        .insert(FpsControllerBodyBundle::new())
+        .with_children(|children| {
+            children
+                .spawn(RightCamera)
+                .insert(LookTransformCameraBundle {
+                    camera_bundle: Camera3dBundle {
+                        camera: Camera {
+                            // Renders the right camera after the left camera, which has a default priority of 0
+                            priority: 1,
+                            ..default()
+                        },
+                        camera_3d: Camera3d {
+                            // don't clear on the second camera because the first camera already cleared the window
+                            clear_color: ClearColorConfig::None,
+                            ..default()
+                        },
+                        ..default()
+                    },
+                    ..default()
+                });
         });
 }
 
-fn print_ball_altitude(positions: Query<(&Name, &Transform), With<RigidBody>>) {
-    for (name, transform) in positions.iter() {
-        println!("Altitude of {}: {}", name.0, transform.translation.y);
-    }
-}
+// fn print_ball_altitude(positions: Query<(&Name, &Transform), With<RigidBody>>) {
+//     for (name, transform) in positions.iter() {
+//         println!("Altitude of {}: {}", name.0, transform.translation.y);
+//     }
+// }
 
-fn sync_camera(
-    local_players: Query<(&LocalPlayer, &Transform), With<LocalPlayer>>,
-    mut cameras: Query<&mut Transform, (With<Camera>, Without<LocalPlayer>)>,
+fn set_camera_viewports(
+    windows: Res<Windows>,
+    mut resize_events: EventReader<WindowResized>,
+    mut left_camera: Query<&mut Camera, (With<LeftCamera>, Without<RightCamera>)>,
+    mut right_camera: Query<&mut Camera, With<RightCamera>>,
 ) {
-    let Some((local_player_0, transform_player_0)) = local_players.iter().next() else { return; };
-    let Some(mut transform_cam_0) = cameras.iter_mut().next() else { return; };
+    // We need to dynamically resize the camera's viewports whenever the window size changes
+    // so then each camera always takes up half the screen.
+    // A resize_event is sent when the window is first created, allowing us to reuse this system for initial setup.
+    for resize_event in resize_events.iter() {
+        let window = windows.get(resize_event.id).unwrap();
+        let mut left_camera = left_camera.single_mut();
+        left_camera.viewport = Some(Viewport {
+            physical_position: UVec2::new(0, 0),
+            physical_size: UVec2::new(window.physical_width() / 2, window.physical_height()),
+            ..default()
+        });
 
-    let player_pos = transform_player_0.transform_point(Vec3::ZERO);
-    let new_cam_pos = player_pos + local_player_0.0;
-    transform_cam_0.as_mut().clone_from(
-        &Transform::from_translation(new_cam_pos)
-            .looking_at(new_cam_pos + 1. * Vec3::Z - 0. * Vec3::Y, Vec3::Y),
-    );
+        let mut right_camera = right_camera.single_mut();
+        right_camera.viewport = Some(Viewport {
+            physical_position: UVec2::new(window.physical_width() / 2, 0),
+            physical_size: UVec2::new(window.physical_width() / 2, window.physical_height()),
+            ..default()
+        });
+    }
 }
