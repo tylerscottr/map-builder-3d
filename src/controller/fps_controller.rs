@@ -96,18 +96,25 @@ pub fn custom_input_map(
         mouse_rotate_sensitivity * cursor_delta,
     ));
 
-    for (key, dir) in [
+    let translation_dir_option = [
         (KeyCode::W, Vec3::Z),
         (KeyCode::A, Vec3::X),
         (KeyCode::S, -Vec3::Z),
         (KeyCode::D, -Vec3::X),
     ]
     .iter()
-    .cloned()
-    {
+    .fold(None, |dir_acc, &(key, dir)| {
         if keyboard.pressed(key) {
-            events.send(FpsControlEvent::Translate(translate_velocity * dir));
+            return Some(dir_acc.map_or(dir, |acc| acc + dir));
+        } else {
+            return dir_acc;
         }
+    });
+
+    if let Some(translation_dir) = translation_dir_option {
+        events.send(FpsControlEvent::Translate(
+            translate_velocity * translation_dir.normalize(),
+        ));
     }
 
     if keyboard.pressed(KeyCode::Space) {
@@ -118,6 +125,7 @@ pub fn custom_input_map(
 /// Implements the control system for [`FpsCameraPlugin`].
 pub fn fps_control_system(
     time: Res<Time>,
+    rapier_context: Res<RapierContext>,
     mut events: EventReader<FpsControlEvent>,
     mut cameras: Query<(&Parent, &mut LookTransform, &mut Transform)>,
     mut controllers: Query<(
@@ -144,8 +152,9 @@ pub fn fps_control_system(
                 FpsControlEvent::Translate(delta) => {
                     // Translates the parent up/down (Y) left/right (X) and forward/back (Z).
                     if let Ok((mut parent_controller, _, _)) = controllers.get_mut(parent.get()) {
-                        let translation =
-                            dt * (delta.x * rot_x + delta.y * rot_y + delta.z * rot_z);
+                        let translation = dt
+                            * (delta.x * rot_x + delta.y * rot_y + delta.z * rot_z)
+                            * rapier_context.physics_scale();
                         parent_controller.translation = Some(
                             parent_controller
                                 .translation
@@ -160,7 +169,7 @@ pub fn fps_control_system(
                         controllers.get_mut(parent.get())
                     {
                         if parent_controller_output.grounded {
-                            velocity.0 = *jump_velocity;
+                            velocity.0 = *jump_velocity * rapier_context.physics_scale();
                         }
                     }
                 }

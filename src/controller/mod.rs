@@ -141,6 +141,7 @@ impl Default for CustomVelocity {
 
 fn apply_gravity(
     time: Res<Time>,
+    rapier_config: Res<RapierConfiguration>,
     mut query: Query<
         (
             &mut CustomVelocity,
@@ -156,12 +157,18 @@ fn apply_gravity(
             velocity.0.y = 0.0;
         } else {
             // Accelerate due to gravity.
-            let new_velocity = velocity.0 + time.delta_seconds() * Vec3::new(0.0, -9.81, 0.0);
+            let new_velocity = velocity.0 + time.delta_seconds() * rapier_config.gravity;
             velocity.0 = new_velocity;
         }
 
         // Apply velocity.
-        controller.translation = Some(time.delta_seconds() * velocity.0);
+        let translation = time.delta_seconds() * velocity.0;
+        controller.translation = Some(
+            controller
+                .translation
+                .map(|t| t + translation)
+                .unwrap_or(translation),
+        )
     }
 }
 
